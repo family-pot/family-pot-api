@@ -34,3 +34,5 @@ jobs:
 
       - name: Format, lint, typecheck, test and build
         run: pnpm check
+      - name: Coverage (money module must stay at 100%)
+        run: pnpm test:cov
