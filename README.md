@@ -246,7 +246,25 @@ Notes:
 - Invalid input is a `400` with the usual flat `message` list **and** `errors: [{ "field": "sent.amount", "messages": ["..."] }]`, so a form can show each problem next to its field. This applies to every endpoint.
 - `PATCH` is partial; `sent` and `fee` are replaced whole. Changing the sending currency requires restating the fee, because the fee is in the sending currency.
 - Another user's transfer is `404` for read, update and delete. A recipient that has transfers cannot be deleted: the API answers `409`, and a `RESTRICT` foreign key enforces it in the database as well. The database also checks `sentAmountMinor > 0`, `feeMinor >= 0` and the status values.
-- Listing is newest first (`transferDate`, then `id`). Filters and pagination are a separate issue.
+
+### Listing: filters and pagination
+
+`GET /api/v1/transfers` returns `{ "data": [...transfers], "pagination": { "limit", "hasMore", "nextCursor" } }`, always scoped to the current user and sorted **newest first: `transferDate` descending, then `id` descending**, so the order is total and stable.
+
+| Query parameter | Meaning |
+|---|---|
+| `recipientId` | only transfers to this recipient (a UUID) |
+| `dateFrom`, `dateTo` | inclusive date range, `YYYY-MM-DD`; `dateFrom` must not be after `dateTo` |
+| `provider` | exact provider name, case-insensitive (`wise` matches `Wise`) |
+| `status` | `pending`, `completed`, `failed` or `cancelled` |
+| `limit` | page size, 1 to 100 (default 20) |
+| `cursor` | the previous page's `pagination.nextCursor` |
+
+Filters are optional and combine with AND. Invalid values, a reversed date range, a bad `limit` or `cursor`, and **unknown parameters** are `400` (with the field-level `errors`). No match is `200` with an empty `data` list.
+
+**Pagination method: cursor (keyset).** A page starts strictly after the last item of the previous one, so transfers added or deleted between two requests can never make a page repeat or skip an item, which offset pagination cannot guarantee. Cursors are opaque, hold only the sort key (no data), are always applied inside the caller's own rows, and `nextCursor` is `null` on the last page. Walk all pages by repeating the request with `cursor=<nextCursor>` until it is `null`. A transfer created after you started is not injected into a walk that is already past its position.
+
+Indexes (migration `AddTransferListIndexes`): `(userId, transferDate, id)` for the sort, plus `(userId, recipientId, ...)`, `(userId, status, ...)` and `(userId, LOWER(provider), ...)` for the filters. The last one is an expression index created by hand in the migration, because TypeORM cannot declare those.
 
 ## Security baseline
 

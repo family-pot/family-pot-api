@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -27,6 +28,7 @@ import {
   TransferResponse,
   UpdateTransferDto,
 } from './transfer.dto.js';
+import { ListTransfersQuery, TransferPage } from './list-transfers.dto.js';
 import { toTransferResponse } from './transfer.mapper.js';
 import { TransfersService } from './transfers.service.js';
 
@@ -80,10 +82,27 @@ export class TransfersController {
   }
 
   @Get()
-  @ApiOperation({ summary: "List the current user's transfers, newest first" })
-  @ApiOkResponse({ type: [TransferResponse] })
-  async list(@CurrentUser() user: AuthUser): Promise<TransferResponse[]> {
-    return (await this.transfers.list(user.id)).map(toTransferResponse);
+  @ApiOperation({
+    summary: "List the current user's transfers, newest first",
+    description:
+      "Filters (all optional, combinable): `recipientId`, `dateFrom`/`dateTo` (inclusive), `provider` (exact, case-insensitive) and `status`. Sorted by `transferDate` descending, then `id` descending. Pagination is cursor-based: pass the previous page's `pagination.nextCursor` as `cursor`; it is `null` on the last page. Invalid or unknown parameters are `400`.",
+  })
+  @ApiOkResponse({ type: TransferPage })
+  @ApiBadRequestResponse({
+    description: 'Invalid filter, limit or cursor, or an unknown parameter.',
+  })
+  async list(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListTransfersQuery,
+  ): Promise<TransferPage> {
+    const { items, limit, nextCursor } = await this.transfers.list(
+      user.id,
+      query,
+    );
+    return {
+      data: items.map(toTransferResponse),
+      pagination: { limit, hasMore: nextCursor !== null, nextCursor },
+    };
   }
 
   @Get(':id')
