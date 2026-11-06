@@ -126,7 +126,7 @@ Entities live in `*.entity.ts` files and extend `AppBaseEntity` (uuid `id`, `cre
 
 ### Destructive-script guard
 
-`migration:revert`, `db:test:reset` and any seed script refuse to run unless the database host is `localhost`, `127.0.0.1` or `::1`, or `ALLOW_REMOTE_DB_RESET=true`. A seed script must run `node dist/database/guard-cli.js seed &&` first (or call `assertDestructiveAllowed`).
+`migration:revert`, `db:test:reset` and any seed script refuse to run unless the database host is `localhost`, `127.0.0.1` or `::1`, or `ALLOW_REMOTE_DB_RESET=true`. `pnpm seed` runs this guard itself, before it connects (see Seeding below).
 
 ### Tests
 
@@ -185,6 +185,27 @@ export class RecipientsController {
 #### Refresh token transport
 
 ADR 0005 recommends an httpOnly `Secure` cookie for the refresh token, with Vercel proxying `/api/*` to this API so the cookie is first-party. That is what is implemented. The maintainer decision on transport is still open in the ADR, and the details of the proxy have not been verified. The cookie's `SameSite` is configurable for that reason: `strict` (default) suits the first-party proxy; `lax` also allows top-level navigations; `none` is for a cross-site API and is always sent with `Secure` (needs HTTPS and a matching `CORS_ORIGIN`, which already allows credentials). Because the refresh and logout endpoints rely on a cookie, `SameSite` is also the CSRF protection for them.
+
+## Seeding demo data
+
+`pnpm seed` creates a demo user with sample recipients and transfers so you can log in and see a realistic dashboard locally:
+
+```bash
+pnpm migration:run   # the schema must exist
+pnpm seed
+```
+
+| | |
+|---|---|
+| Email | `demo@familypot.example` |
+| Password | `demo-password-dev` |
+
+**These credentials are for local development only.** They are public (they are in this README), the people and transfers are made up, and every record is marked as sample data. Never create this account on a shared or real database.
+
+- **Idempotent:** every record is found by a stable key first and created only if missing, so running it twice changes nothing (the second run reports `0 recipients and 0 transfers created`). It never deletes anything, and never touches other users' data. If someone changed the demo password, the seed restores it so the documented login keeps working.
+- **Guarded:** it uses the same destructive-script guard as `migration:revert` (ADR 0003) **before connecting**. It refuses unless the host in `DATABASE_URL` is `localhost`, `127.0.0.1` or `::1`, or `ALLOW_REMOTE_DB_RESET=true` is set. Seeding Render or Neon is out of scope, so do not set the override for that.
+- **Money:** all amounts are created through the money module (whole minor units, decimal-string rates), and the data only uses currencies and rules the API itself accepts (a test enforces this).
+- The data uses fixed dates, which is what keeps re-runs from creating duplicates on a later day.
 
 ## Recipients
 

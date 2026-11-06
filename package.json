@@ -28,7 +28,8 @@
     "migration:generate": "nest build && typeorm migration:generate --esm -d dist/database/data-source.js",
     "migration:run": "nest build && typeorm migration:run -d dist/database/data-source.js",
     "migration:revert": "nest build && node dist/database/guard-cli.js migration:revert && typeorm migration:revert -d dist/database/data-source.js",
-    "db:test:reset": "nest build && node dist/database/reset-test-db.js"
+    "db:test:reset": "nest build && node dist/database/reset-test-db.js",
+    "seed": "nest build && node dist/database/seed-cli.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
