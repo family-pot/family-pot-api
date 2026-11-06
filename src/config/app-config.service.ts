@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { EnvironmentVariables, NodeEnvironment } from './environment.js';
+import type {
+  EnvironmentVariables,
+  NodeEnvironment,
+  SameSiteMode,
+} from './environment.js';
 
 /**
  * Typed access to the values parsed by validateEnvironment.
@@ -46,6 +50,10 @@ export class AppConfigService {
 
   get refreshTokenTtlDays(): number {
     return this.config.getOrThrow<number>('REFRESH_TOKEN_TTL_DAYS');
+  }
+
+  get refreshCookieSameSite(): SameSiteMode {
+    return this.config.getOrThrow<SameSiteMode>('REFRESH_COOKIE_SAME_SITE');
   }
 
   get allowRemoteDbReset(): boolean {

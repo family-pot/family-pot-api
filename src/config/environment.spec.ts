@@ -28,6 +28,7 @@ describe('validateEnvironment', () => {
     expect(env.JWT_ACCESS_TTL).toBe('15m');
     expect(env.REFRESH_TOKEN_TTL_DAYS).toBe(7);
     expect(env.ALLOW_REMOTE_DB_RESET).toBe(false);
+    expect(env.REFRESH_COOKIE_SAME_SITE).toBe('strict');
   });
 
   it('parses explicit values into typed values', () => {
@@ -135,5 +136,15 @@ describe('validateEnvironment', () => {
     expect(message).toContain('PORT');
     expect(message).toContain('DATABASE_URL');
     expect(message).toContain('JWT_ACCESS_SECRET');
+  });
+
+  it('validates REFRESH_COOKIE_SAME_SITE', () => {
+    expect(
+      validateEnvironment({ ...validConfig, REFRESH_COOKIE_SAME_SITE: 'lax' })
+        .REFRESH_COOKIE_SAME_SITE,
+    ).toBe('lax');
+    expect(
+      errorFor({ ...validConfig, REFRESH_COOKIE_SAME_SITE: 'sometimes' }),
+    ).toContain('REFRESH_COOKIE_SAME_SITE must be strict, lax or none.');
   });
 });

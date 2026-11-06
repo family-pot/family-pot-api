@@ -33,6 +33,7 @@ export function configureApp(app: INestApplication): void {
         'REST API for tracking money sent home. Money values are strings; see ADR 0004.',
       )
       .setVersion('1')
+      .addBearerAuth()
       .build(),
   );
   // Registered under /api/docs; Swagger paths are not affected by the global prefix.

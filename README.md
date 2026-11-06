@@ -82,6 +82,7 @@ lists every invalid variable before it starts listening.
 | `JWT_ACCESS_SECRET` | Yes | — | At least 32 characters; generate a random value and keep it secret |
 | `JWT_ACCESS_TTL` | No | `15m` | Access-token lifetime such as `30s`, `15m`, `1h` or `7d` |
 | `REFRESH_TOKEN_TTL_DAYS` | No | `7` | Refresh-token lifetime in whole days (1–365) |
+| `REFRESH_COOKIE_SAME_SITE` | No | `strict` | `strict`, `lax` or `none`. See "Refresh token transport" below |
 | `ALLOW_REMOTE_DB_RESET` | No | `false` | Allows destructive resets outside local development |
 
 For local Postgres, the `DATABASE_URL` usually looks like
