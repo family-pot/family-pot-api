@@ -18,6 +18,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { StrictRateLimit } from '../common/rate-limit.js';
 import { AppConfigService } from '../config/app-config.service.js';
 import { UsersService } from '../users/users.service.js';
 import { Auth, CurrentUser } from './auth.decorators.js';
@@ -52,6 +53,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @StrictRateLimit()
   @HttpCode(201)
   @ApiOperation({
     summary: 'Register a user',
@@ -71,6 +73,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @StrictRateLimit()
   @HttpCode(200)
   @ApiOperation({
     summary: 'Log in',
@@ -93,6 +96,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @StrictRateLimit()
   @HttpCode(200)
   @ApiOperation({
     summary: 'Refresh the access token',

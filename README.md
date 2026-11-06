@@ -83,6 +83,10 @@ lists every invalid variable before it starts listening.
 | `JWT_ACCESS_TTL` | No | `15m` | Access-token lifetime such as `30s`, `15m`, `1h` or `7d` |
 | `REFRESH_TOKEN_TTL_DAYS` | No | `7` | Refresh-token lifetime in whole days (1–365) |
 | `REFRESH_COOKIE_SAME_SITE` | No | `strict` | `strict`, `lax` or `none`. See "Refresh token transport" below |
+| `RATE_LIMIT_GLOBAL_LIMIT` / `RATE_LIMIT_GLOBAL_TTL_SECONDS` | No | `100` / `60` | Requests per client IP per window, for every route |
+| `RATE_LIMIT_AUTH_LIMIT` / `RATE_LIMIT_AUTH_TTL_SECONDS` | No | `10` / `60` | Stricter limit for `register`, `login` and `refresh` |
+| `REQUEST_BODY_LIMIT` | No | `100kb` | Maximum request body, such as `100kb` or `1mb` |
+| `TRUST_PROXY` | No | `0` | Number of reverse proxies in front of the API (use `1` on Render) |
 | `ALLOW_REMOTE_DB_RESET` | No | `false` | Allows destructive resets outside local development |
 
 For local Postgres, the `DATABASE_URL` usually looks like
@@ -181,6 +185,15 @@ export class RecipientsController {
 #### Refresh token transport
 
 ADR 0005 recommends an httpOnly `Secure` cookie for the refresh token, with Vercel proxying `/api/*` to this API so the cookie is first-party. That is what is implemented. The maintainer decision on transport is still open in the ADR, and the details of the proxy have not been verified. The cookie's `SameSite` is configurable for that reason: `strict` (default) suits the first-party proxy; `lax` also allows top-level navigations; `none` is for a cross-site API and is always sent with `Secure` (needs HTTPS and a matching `CORS_ORIGIN`, which already allows credentials). Because the refresh and logout endpoints rely on a cookie, `SameSite` is also the CSRF protection for them.
+
+## Security baseline
+
+- **Headers:** `helmet` defaults on every response (CSP, `X-Content-Type-Options`, HSTS, ...), and `X-Powered-By` is removed. The Swagger UI pages under `/api/docs` get a relaxed script policy (inline scripts) because the UI needs it; the API itself does not.
+- **Rate limiting** (per client IP, in memory): a global limit for every route and a stricter one for `POST /auth/register`, `/auth/login` and `/auth/refresh`, each counted per route. Over the limit the API answers `429`. The stricter limit's retry hint is the `Retry-After-auth` header (named throttlers suffix the header name). Limits come from the environment (see the table above).
+- **Behind a proxy:** set `TRUST_PROXY` to the number of proxies, otherwise every client shares the proxy's IP and therefore its limit. The in-memory counters are per process, so with several instances each has its own budget.
+- **Request size:** bodies over `REQUEST_BODY_LIMIT` get `413`; malformed JSON gets `400`.
+- **Validation:** a global validation pipe rejects unknown properties (`400`) and invalid fields with field-level messages.
+- **Errors:** a global exception filter keeps the status and message of expected errors (validation, `401`, `404`, `429`, `413`, ...). Anything unexpected becomes `500 { "statusCode": 500, "message": "Internal server error" }`; the details are logged server-side only. Outside production the response also carries `detail` and `stack` to ease debugging; **in production it never does**.
 
 ## Contributing
 

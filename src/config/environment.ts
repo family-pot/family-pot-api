@@ -18,6 +18,12 @@ export interface EnvironmentVariables {
   REFRESH_TOKEN_TTL_DAYS: number;
   REFRESH_COOKIE_SAME_SITE: SameSiteMode;
   ALLOW_REMOTE_DB_RESET: boolean;
+  RATE_LIMIT_GLOBAL_LIMIT: number;
+  RATE_LIMIT_GLOBAL_TTL_SECONDS: number;
+  RATE_LIMIT_AUTH_LIMIT: number;
+  RATE_LIMIT_AUTH_TTL_SECONDS: number;
+  REQUEST_BODY_LIMIT: string;
+  TRUST_PROXY: number;
 }
 
 const NODE_ENVIRONMENTS: readonly NodeEnvironment[] = [
@@ -25,6 +31,8 @@ const NODE_ENVIRONMENTS: readonly NodeEnvironment[] = [
   'test',
   'production',
 ];
+
+const BODY_LIMIT_PATTERN = /^[1-9]\d*(kb|mb)$/;
 
 const DURATION_PATTERN = /^[1-9]\d*(s|m|h|d)$/;
 
@@ -192,6 +200,45 @@ export function validateEnvironment(
     problems.push('REFRESH_COOKIE_SAME_SITE must be strict, lax or none.');
   }
 
+  const rateLimitGlobal = parseInteger(
+    config,
+    'RATE_LIMIT_GLOBAL_LIMIT',
+    100,
+    1,
+    1_000_000,
+    problems,
+  );
+  const rateLimitGlobalTtl = parseInteger(
+    config,
+    'RATE_LIMIT_GLOBAL_TTL_SECONDS',
+    60,
+    1,
+    86_400,
+    problems,
+  );
+  const rateLimitAuth = parseInteger(
+    config,
+    'RATE_LIMIT_AUTH_LIMIT',
+    10,
+    1,
+    1_000_000,
+    problems,
+  );
+  const rateLimitAuthTtl = parseInteger(
+    config,
+    'RATE_LIMIT_AUTH_TTL_SECONDS',
+    60,
+    1,
+    86_400,
+    problems,
+  );
+  const trustProxy = parseInteger(config, 'TRUST_PROXY', 0, 0, 10, problems);
+
+  const requestBodyLimit = text(config, 'REQUEST_BODY_LIMIT') ?? '100kb';
+  if (!BODY_LIMIT_PATTERN.test(requestBodyLimit)) {
+    problems.push('REQUEST_BODY_LIMIT must look like 100kb or 1mb.');
+  }
+
   if (problems.length > 0) {
     throw new Error(
       `Invalid environment configuration:\n${problems
@@ -212,5 +259,11 @@ export function validateEnvironment(
     REFRESH_TOKEN_TTL_DAYS: refreshTokenTtlDays,
     REFRESH_COOKIE_SAME_SITE: sameSite,
     ALLOW_REMOTE_DB_RESET: allowRemoteDbReset,
+    RATE_LIMIT_GLOBAL_LIMIT: rateLimitGlobal,
+    RATE_LIMIT_GLOBAL_TTL_SECONDS: rateLimitGlobalTtl,
+    RATE_LIMIT_AUTH_LIMIT: rateLimitAuth,
+    RATE_LIMIT_AUTH_TTL_SECONDS: rateLimitAuthTtl,
+    REQUEST_BODY_LIMIT: requestBodyLimit,
+    TRUST_PROXY: trustProxy,
   };
 }

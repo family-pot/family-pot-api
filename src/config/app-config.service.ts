@@ -56,6 +56,31 @@ export class AppConfigService {
     return this.config.getOrThrow<SameSiteMode>('REFRESH_COOKIE_SAME_SITE');
   }
 
+  get rateLimitGlobalLimit(): number {
+    return this.config.getOrThrow<number>('RATE_LIMIT_GLOBAL_LIMIT');
+  }
+
+  get rateLimitGlobalTtlSeconds(): number {
+    return this.config.getOrThrow<number>('RATE_LIMIT_GLOBAL_TTL_SECONDS');
+  }
+
+  get rateLimitAuthLimit(): number {
+    return this.config.getOrThrow<number>('RATE_LIMIT_AUTH_LIMIT');
+  }
+
+  get rateLimitAuthTtlSeconds(): number {
+    return this.config.getOrThrow<number>('RATE_LIMIT_AUTH_TTL_SECONDS');
+  }
+
+  get requestBodyLimit(): string {
+    return this.config.getOrThrow<string>('REQUEST_BODY_LIMIT');
+  }
+
+  /** Number of reverse proxies in front of the API (0 = none). */
+  get trustProxy(): number {
+    return this.config.getOrThrow<number>('TRUST_PROXY');
+  }
+
   get allowRemoteDbReset(): boolean {
     return this.config.getOrThrow<boolean>('ALLOW_REMOTE_DB_RESET');
   }
