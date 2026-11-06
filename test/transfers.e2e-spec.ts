@@ -348,7 +348,7 @@ describe('Transfers (e2e)', () => {
         .get('/api/v1/transfers')
         .set('Authorization', other.auth)
         .expect(200);
-      expect(list.body).toEqual([]);
+      expect(list.body.data).toEqual([]);
     });
   });
 
@@ -377,14 +377,14 @@ describe('Transfers (e2e)', () => {
         .set('Authorization', user.auth)
         .expect(200);
       expect(
-        res.body.map((t: { transferDate: string }) => t.transferDate),
+        res.body.data.map((t: { transferDate: string }) => t.transferDate),
       ).toEqual([isoDay(-1), isoDay(-1), isoDay(-5), isoDay(-10)]);
       const again = await http()
         .get('/api/v1/transfers')
         .set('Authorization', user.auth)
         .expect(200);
-      expect(again.body.map((t: { id: string }) => t.id)).toEqual(
-        res.body.map((t: { id: string }) => t.id),
+      expect(again.body.data.map((t: { id: string }) => t.id)).toEqual(
+        res.body.data.map((t: { id: string }) => t.id),
       );
     });
   });
@@ -552,7 +552,7 @@ describe('Transfers (e2e)', () => {
         .get('/api/v1/transfers')
         .set(as)
         .expect(200);
-      expect(theirList.body).toEqual([]);
+      expect(theirList.body.data).toEqual([]);
     });
   });
 

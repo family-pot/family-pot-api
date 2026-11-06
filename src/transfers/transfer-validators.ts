@@ -28,14 +28,8 @@ export function isExchangeRate(value: unknown): boolean {
   }
 }
 
-/**
- * A real calendar date `YYYY-MM-DD` from 2000-01-01 up to one day after today
- * (UTC). The one day of slack covers senders in time zones ahead of UTC.
- */
-export function isTransferDate(
-  value: unknown,
-  now: Date = new Date(),
-): boolean {
+/** A real calendar date `YYYY-MM-DD`, with no range restriction (used for filters and cursors). */
+export function isCalendarDate(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const match = DATE.exec(value);
   if (!match) return false;
@@ -45,11 +39,23 @@ export function isTransferDate(
     Number(match[3]),
   ];
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  const real =
+  return (
     parsed.getUTCFullYear() === year &&
     parsed.getUTCMonth() === month - 1 &&
-    parsed.getUTCDate() === day;
-  if (!real) return false;
+    parsed.getUTCDate() === day
+  );
+}
+
+/**
+ * A real calendar date `YYYY-MM-DD` from 2000-01-01 up to one day after today
+ * (UTC). The one day of slack covers senders in time zones ahead of UTC.
+ */
+export function isTransferDate(
+  value: unknown,
+  now: Date = new Date(),
+): boolean {
+  if (!isCalendarDate(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
   const latest = Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),
@@ -89,6 +95,13 @@ export const IsExchangeRate = (): PropertyDecorator =>
     'isExchangeRate',
     isExchangeRate,
     'exchangeRate must be a positive decimal string with at most 12 decimal places, such as "1950.5".',
+  );
+
+export const IsCalendarDate = (): PropertyDecorator =>
+  decorator(
+    'isCalendarDate',
+    isCalendarDate,
+    'must be a real date in the format YYYY-MM-DD.',
   );
 
 export const IsTransferDate = (): PropertyDecorator =>

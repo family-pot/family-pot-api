@@ -10,7 +10,12 @@ import {
 import { RecipientUsageRegistry } from '../recipients/recipient-usage.registry.js';
 import { RecipientsService } from '../recipients/recipients.service.js';
 import type { CreateTransferDto, UpdateTransferDto } from './transfer.dto.js';
+import {
+  DEFAULT_PAGE_SIZE,
+  type ListTransfersQuery,
+} from './list-transfers.dto.js';
 import { Transfer } from './transfer.entity.js';
+import { decodeCursor, encodeCursor } from './transfer-cursor.js';
 
 /** The rate as stored: no trailing zeros, so what we return is what a re-read returns. */
 function canonicalRate(value: string): string {
@@ -36,12 +41,76 @@ export class TransfersService implements OnModuleInit {
     });
   }
 
-  /** Newest first, with the id as a tiebreak so the order is stable. */
-  list(userId: string): Promise<Transfer[]> {
-    return this.transfers.find({
-      where: { userId },
-      order: { transferDate: 'DESC', id: 'DESC' },
-    });
+  /**
+   * One page of the user's transfers, newest first (`transferDate` descending,
+   * `id` descending as the tiebreak, so the order is total and stable).
+   *
+   * Pagination is keyset-based: each page starts strictly after the last item of
+   * the previous one. Unlike offsets, that cannot skip or repeat a transfer when
+   * rows are added or removed between requests.
+   */
+  async list(
+    userId: string,
+    query: ListTransfersQuery,
+  ): Promise<{ items: Transfer[]; limit: number; nextCursor: string | null }> {
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    if (query.dateFrom && query.dateTo && query.dateFrom > query.dateTo) {
+      throw validationError([
+        { field: 'dateFrom', messages: ['dateFrom must not be after dateTo.'] },
+      ]);
+    }
+    const cursor =
+      query.cursor === undefined ? undefined : decodeCursor(query.cursor);
+    if (query.cursor !== undefined && !cursor) {
+      throw validationError([
+        { field: 'cursor', messages: ['cursor is not valid.'] },
+      ]);
+    }
+
+    const qb = this.transfers
+      .createQueryBuilder('t')
+      .where('t.userId = :userId', { userId }); // always scoped to the caller
+    if (query.recipientId)
+      qb.andWhere('t.recipientId = :recipientId', {
+        recipientId: query.recipientId,
+      });
+    if (query.dateFrom)
+      qb.andWhere('t.transferDate >= :dateFrom', { dateFrom: query.dateFrom });
+    if (query.dateTo)
+      qb.andWhere('t.transferDate <= :dateTo', { dateTo: query.dateTo });
+    if (query.provider)
+      qb.andWhere('LOWER(t.provider) = LOWER(:provider)', {
+        provider: query.provider,
+      });
+    if (query.status)
+      qb.andWhere('t.status = :status', { status: query.status });
+    if (cursor) {
+      qb.andWhere(
+        '(t.transferDate, t.id) < (CAST(:cursorDate AS date), CAST(:cursorId AS uuid))',
+        {
+          cursorDate: cursor.transferDate,
+          cursorId: cursor.id,
+        },
+      );
+    }
+
+    // One extra row tells us whether another page exists.
+    const rows = await qb
+      .orderBy('t.transferDate', 'DESC')
+      .addOrderBy('t.id', 'DESC')
+      .limit(limit + 1)
+      .getMany();
+
+    const items = rows.slice(0, limit);
+    const last = items.at(-1);
+    return {
+      items,
+      limit,
+      nextCursor:
+        rows.length > limit && last
+          ? encodeCursor({ transferDate: last.transferDate, id: last.id })
+          : null,
+    };
   }
 
   /** Another user's transfer is indistinguishable from a missing one: 404. */

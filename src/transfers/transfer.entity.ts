@@ -5,12 +5,30 @@ import { Recipient } from '../recipients/recipient.entity.js';
 import { User } from '../users/user.entity.js';
 import type { TransferStatus } from './transfer-status.js';
 
+// Indexes behind GET /transfers. Every query is scoped by userId first, and the
+// sort is transferDate DESC, id DESC, which these serve by scanning backwards.
+@Index('IDX_transfers_user_date', ['userId', 'transferDate', 'id'])
+@Index('IDX_transfers_user_recipient_date', [
+  'userId',
+  'recipientId',
+  'transferDate',
+  'id',
+])
+@Index('IDX_transfers_user_status_date', [
+  'userId',
+  'status',
+  'transferDate',
+  'id',
+])
+// The provider filter is case-insensitive, so its index is on LOWER(provider).
+// TypeORM cannot declare expression indexes; the migration creates it by hand
+// and `synchronize: false` stops migration:check from reporting it as drift.
+@Index('IDX_transfers_user_provider_date', { synchronize: false })
 @Entity({ name: 'transfers' })
 @Check("\"status\" IN ('pending', 'completed', 'failed', 'cancelled')")
 @Check('"sentAmountMinor" > 0')
 @Check('"feeMinor" >= 0')
 export class Transfer extends AppBaseEntity {
-  @Index()
   @Column({ type: 'uuid' })
   userId: string;
 
