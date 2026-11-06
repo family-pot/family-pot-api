@@ -82,6 +82,7 @@ lists every invalid variable before it starts listening.
 | `JWT_ACCESS_SECRET` | Yes | — | At least 32 characters; generate a random value and keep it secret |
 | `JWT_ACCESS_TTL` | No | `15m` | Access-token lifetime such as `30s`, `15m`, `1h` or `7d` |
 | `REFRESH_TOKEN_TTL_DAYS` | No | `7` | Refresh-token lifetime in whole days (1–365) |
+| `REFRESH_COOKIE_SAME_SITE` | No | `strict` | `strict`, `lax` or `none`. See "Refresh token transport" below |
 | `ALLOW_REMOTE_DB_RESET` | No | `false` | Allows destructive resets outside local development |
 
 For local Postgres, the `DATABASE_URL` usually looks like
@@ -126,6 +127,60 @@ Entities live in `*.entity.ts` files and extend `AppBaseEntity` (uuid `id`, `cre
 ### Tests
 
 Tests never read `DATABASE_URL`: `test/setup.ts` replaces it with `DATABASE_URL_TEST`. `pnpm test:e2e` needs Postgres reachable there; CI runs it against a Postgres 16 service container (`.github/workflows/integration.yml`).
+
+## Authentication
+
+### `POST /api/v1/auth/register`
+
+Body `{ "email": "...", "password": "..." }`; returns `201` with `{ "id", "email" }` only. Documented in Swagger at `/api/docs`.
+
+Password policy and handling:
+
+- Length **12 to 128** characters. The maximum stops a huge password from being used to burn CPU and memory while hashing.
+- Hashed with **argon2id** (the `argon2` package) at the OWASP minimum configuration: 19 MiB memory, 2 iterations, 1 lane. The parameters are encoded in each stored hash, so they can be raised later and old hashes keep verifying.
+- Only the hash is stored (`users.passwordHash`). Passwords and hashes are never returned or logged.
+- Emails are trimmed and stored lowercase, and are unique, so registration is case-insensitive.
+- A duplicate email returns `409` with the same generic message as any other registration conflict (`Registration could not be completed.`), and the password is hashed before the lookup so a duplicate costs the same time as a new account.
+- Unknown request fields are rejected with `400`.
+
+### `POST /api/v1/auth/login` and `GET /api/v1/auth/me`
+
+`POST /api/v1/auth/login` with `{ "email", "password" }` returns `200` with `{ "accessToken", "tokenType": "Bearer", "expiresIn" }`. The access token is a JWT (HS256) signed with `JWT_ACCESS_SECRET`, valid for `JWT_ACCESS_TTL` (default `15m`), carrying only the user id as `sub`. Refresh tokens are a separate issue.
+
+A wrong password and an unknown email return the identical `401` (`Invalid email or password.`). Both paths run one argon2 verification (an unknown email verifies against a throwaway hash), so the response time does not reveal whether an email is registered.
+
+`GET /api/v1/auth/me` returns `{ id, email }` for the bearer token in the `Authorization` header. In Swagger, click **Authorize** and paste the token.
+
+### Protecting an endpoint
+
+Import `AuthModule` in the module that declares your controller and add one decorator:
+
+```ts
+@Auth()
+@Controller({ path: 'recipients', version: '1' })
+export class RecipientsController {
+  @Get()
+  list(@CurrentUser() user: AuthUser) {
+    // user.id is the authenticated user
+  }
+}
+```
+
+`@Auth()` can go on a controller or on a single route. Without a valid token the response is `401`. Missing, malformed, expired, tampered or wrongly signed tokens (including `alg: none`), and tokens for users that no longer exist, are all rejected the same way. The secret is read only from configuration (`AppConfigService`), and the algorithm is pinned to HS256.
+
+### Auth flow: refresh and logout (ADR 0005)
+
+1. `POST /api/v1/auth/login` returns a short-lived **access token** in the JSON body (keep it in memory) and sets a **refresh token** in an `httpOnly` cookie (`refresh_token`, `Path=/api/v1/auth`, `Secure` in production, lifetime `REFRESH_TOKEN_TTL_DAYS`). Each login starts a new token *family*.
+2. When the access token expires, `POST /api/v1/auth/refresh` (the cookie is sent automatically) returns a new access token and **rotates** the refresh token: a new cookie replaces the old one, and the old token is marked as replaced. A refresh token therefore works **once**.
+3. **Reuse detection:** presenting a token that was already rotated means it was probably stolen or replayed, so the **whole family is revoked**: the session ends everywhere it was copied, including the newest legitimate token. The caller gets a `401` and must log in again.
+4. `POST /api/v1/auth/logout` revokes the whole family of the cookie's token, clears the cookie and always returns `204` (it reveals nothing about whether a token was valid).
+5. Only a SHA-256 hash of the token is stored (`refresh_tokens.tokenHash`); raw tokens are never stored or logged. Unknown, expired, revoked and reused tokens all get the same generic `401`. Expired and revoked rows are not pruned yet.
+
+**Concurrent refresh with the same token (chosen behaviour):** requests are serialized on the token's row. The first one rotates the token; the second then presents an already-rotated token, which counts as reuse, so it gets `401` and the family is revoked. Two tabs refreshing at the very same moment can therefore log the user out; the web app should serialize its refresh calls. This strict behaviour is covered by a test. A short grace window for the previous token would be friendlier but weakens reuse detection, so it is not implemented.
+
+#### Refresh token transport
+
+ADR 0005 recommends an httpOnly `Secure` cookie for the refresh token, with Vercel proxying `/api/*` to this API so the cookie is first-party. That is what is implemented. The maintainer decision on transport is still open in the ADR, and the details of the proxy have not been verified. The cookie's `SameSite` is configurable for that reason: `strict` (default) suits the first-party proxy; `lax` also allows top-level navigations; `none` is for a cross-site API and is always sent with `Secure` (needs HTTPS and a matching `CORS_ORIGIN`, which already allows credentials). Because the refresh and logout endpoints rely on a cookie, `SameSite` is also the CSRF protection for them.
 
 ## Contributing
 

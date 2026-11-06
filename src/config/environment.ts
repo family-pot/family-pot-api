@@ -1,3 +1,5 @@
+export type SameSiteMode = 'strict' | 'lax' | 'none';
+
 export type NodeEnvironment = 'development' | 'test' | 'production';
 
 /**
@@ -14,6 +16,7 @@ export interface EnvironmentVariables {
   JWT_ACCESS_SECRET: string;
   JWT_ACCESS_TTL: string;
   REFRESH_TOKEN_TTL_DAYS: number;
+  REFRESH_COOKIE_SAME_SITE: SameSiteMode;
   ALLOW_REMOTE_DB_RESET: boolean;
 }
 
@@ -183,6 +186,12 @@ export function validateEnvironment(
     problems,
   );
 
+  const sameSite = (text(config, 'REFRESH_COOKIE_SAME_SITE') ??
+    'strict') as SameSiteMode;
+  if (!['strict', 'lax', 'none'].includes(sameSite)) {
+    problems.push('REFRESH_COOKIE_SAME_SITE must be strict, lax or none.');
+  }
+
   if (problems.length > 0) {
     throw new Error(
       `Invalid environment configuration:\n${problems
@@ -201,6 +210,7 @@ export function validateEnvironment(
     JWT_ACCESS_SECRET: jwtAccessSecret!,
     JWT_ACCESS_TTL: jwtAccessTtl,
     REFRESH_TOKEN_TTL_DAYS: refreshTokenTtlDays,
+    REFRESH_COOKIE_SAME_SITE: sameSite,
     ALLOW_REMOTE_DB_RESET: allowRemoteDbReset,
   };
 }
