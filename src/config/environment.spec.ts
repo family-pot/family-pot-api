@@ -147,4 +147,43 @@ describe('validateEnvironment', () => {
       errorFor({ ...validConfig, REFRESH_COOKIE_SAME_SITE: 'sometimes' }),
     ).toContain('REFRESH_COOKIE_SAME_SITE must be strict, lax or none.');
   });
+
+  it('applies defaults and validates the hardening settings', () => {
+    const env = validateEnvironment(validConfig);
+    expect(env).toMatchObject({
+      RATE_LIMIT_GLOBAL_LIMIT: 100,
+      RATE_LIMIT_GLOBAL_TTL_SECONDS: 60,
+      RATE_LIMIT_AUTH_LIMIT: 10,
+      RATE_LIMIT_AUTH_TTL_SECONDS: 60,
+      REQUEST_BODY_LIMIT: '100kb',
+      TRUST_PROXY: 0,
+    });
+
+    expect(
+      validateEnvironment({
+        ...validConfig,
+        RATE_LIMIT_AUTH_LIMIT: '3',
+        REQUEST_BODY_LIMIT: '2mb',
+        TRUST_PROXY: '1',
+      }),
+    ).toMatchObject({
+      RATE_LIMIT_AUTH_LIMIT: 3,
+      REQUEST_BODY_LIMIT: '2mb',
+      TRUST_PROXY: 1,
+    });
+
+    const message = errorFor({
+      ...validConfig,
+      RATE_LIMIT_GLOBAL_LIMIT: '0',
+      RATE_LIMIT_AUTH_TTL_SECONDS: 'abc',
+      REQUEST_BODY_LIMIT: 'huge',
+      TRUST_PROXY: '99',
+    });
+    expect(message).toContain('RATE_LIMIT_GLOBAL_LIMIT');
+    expect(message).toContain('RATE_LIMIT_AUTH_TTL_SECONDS');
+    expect(message).toContain(
+      'REQUEST_BODY_LIMIT must look like 100kb or 1mb.',
+    );
+    expect(message).toContain('TRUST_PROXY');
+  });
 });
