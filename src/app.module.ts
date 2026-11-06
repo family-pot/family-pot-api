@@ -7,6 +7,7 @@ import { AppConfigService } from './config/app-config.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AppConfigModule } from './config/app-config.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { RecipientsModule } from './recipients/recipients.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthController } from './health/health.controller.js';
       useFactory: throttlerOptions,
     }),
     AuthModule,
+    RecipientsModule,
   ],
   controllers: [HealthController],
   providers: [
