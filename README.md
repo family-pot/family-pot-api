@@ -202,6 +202,52 @@ Every query is scoped to the authenticated user: another user's recipient behave
 
 Records that reference a recipient (transfers) register a check with `RecipientUsageRegistry`, which is how deleting a recipient in use is refused without the recipients module knowing about transfers.
 
+## Transfers
+
+All under `/api/v1/transfers`, behind a bearer token, scoped to the current user, documented in Swagger (with an example) and using the [ADR 0004](https://github.com/family-pot/family-pot-docs/blob/main/adr/0004-money-representation.md) money format: amounts are **whole minor units as strings** (`"15000"` with `GBP` is 150.00), exchange rates are decimal strings, and nothing is a float. All money goes through `src/money`.
+
+```json
+{
+  "recipientId": "0b8f9a7e-3c52-4c8e-9a52-6d9a1f6a1b11",
+  "transferDate": "2026-11-01",
+  "sent": { "amount": "15000", "currency": "GBP" },
+  "fee": { "amount": "350", "currency": "GBP" },
+  "receivingCurrency": "NGN",
+  "exchangeRate": "1950.5",
+  "provider": "Wise",
+  "purpose": "Family support",
+  "status": "completed",
+  "notes": "Rent contribution"
+}
+```
+
+| Field | Rules |
+|---|---|
+| `recipientId` | one of **your** recipients; someone else's is rejected exactly like a missing one |
+| `transferDate` | real calendar date `YYYY-MM-DD`, **not before 2000-01-01 and at most 1 day after today (UTC)** (the day of slack covers time zones ahead of UTC) |
+| `sent` | `amount` a positive whole number of minor units (up to 9223372036854775807), `currency` one of GBP, USD, EUR, CAD, NGN, GHS, KES, INR, PHP |
+| `fee` | optional, defaults to zero; non-negative; **must be in the sending currency** |
+| `receivingCurrency` | one of the supported currencies |
+| `exchangeRate` | positive decimal string, at most 12 decimal places, receiving units per 1 sending unit |
+| `provider` | 1-100 characters |
+| `purpose`, `notes` | optional, up to 200 and 500 characters |
+| `status` | `pending` (default), `completed`, `failed` or `cancelled` |
+
+Responses return each figure with its **provenance**; everything stored here is `user-entered`:
+
+```json
+{ "sent": { "amount": "15000", "currency": "GBP", "provenance": "user-entered" },
+  "exchangeRate": { "value": "1950.5", "provenance": "user-entered" }, "...": "..." }
+```
+
+Notes:
+
+- A transfer **round-trips with exactly the values entered**. The one normalization is that a rate is returned without trailing zeros (`"1950.500"` is stored and returned as `"1950.5"`), the same on create and on every later read.
+- Invalid input is a `400` with the usual flat `message` list **and** `errors: [{ "field": "sent.amount", "messages": ["..."] }]`, so a form can show each problem next to its field. This applies to every endpoint.
+- `PATCH` is partial; `sent` and `fee` are replaced whole. Changing the sending currency requires restating the fee, because the fee is in the sending currency.
+- Another user's transfer is `404` for read, update and delete. A recipient that has transfers cannot be deleted: the API answers `409`, and a `RESTRICT` foreign key enforces it in the database as well. The database also checks `sentAmountMinor > 0`, `feeMinor >= 0` and the status values.
+- Listing is newest first (`transferDate`, then `id`). Filters and pagination are a separate issue.
+
 ## Security baseline
 
 - **Headers:** `helmet` defaults on every response (CSP, `X-Content-Type-Options`, HSTS, ...), and `X-Powered-By` is removed. The Swagger UI pages under `/api/docs` get a relaxed script policy (inline scripts) because the UI needs it; the API itself does not.
