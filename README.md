@@ -186,6 +186,22 @@ export class RecipientsController {
 
 ADR 0005 recommends an httpOnly `Secure` cookie for the refresh token, with Vercel proxying `/api/*` to this API so the cookie is first-party. That is what is implemented. The maintainer decision on transport is still open in the ADR, and the details of the proxy have not been verified. The cookie's `SameSite` is configurable for that reason: `strict` (default) suits the first-party proxy; `lax` also allows top-level navigations; `none` is for a cross-site API and is always sent with `Secure` (needs HTTPS and a matching `CORS_ORIGIN`, which already allows credentials). Because the refresh and logout endpoints rely on a cookie, `SameSite` is also the CSRF protection for them.
 
+## Recipients
+
+All under `/api/v1/recipients`, all requiring a bearer token (see Authentication), and all documented in Swagger.
+
+| Method | Path | Result |
+|---|---|---|
+| `POST` | `/recipients` | `201` with the recipient. Body: `name` (1-100 chars, trimmed), `country` (ISO 3166-1 alpha-2, case-insensitive, stored uppercase), optional `notes` (up to 500) |
+| `GET` | `/recipients` | the current user's recipients, sorted by name (case-insensitive) |
+| `GET` | `/recipients/:id` | one recipient |
+| `PATCH` | `/recipients/:id` | partial update; `notes: null` clears the notes; an empty body is `400` |
+| `DELETE` | `/recipients/:id` | `204`, or `409` if the recipient is still used by transfers |
+
+Every query is scoped to the authenticated user: another user's recipient behaves exactly like a missing one (`404`), for read, update and delete alike. The owner's id is never in a response and cannot be sent in a request (unknown fields are rejected). An id that is not a UUID is also `404`.
+
+Records that reference a recipient (transfers) register a check with `RecipientUsageRegistry`, which is how deleting a recipient in use is refused without the recipients module knowing about transfers.
+
 ## Security baseline
 
 - **Headers:** `helmet` defaults on every response (CSP, `X-Content-Type-Options`, HSTS, ...), and `X-Powered-By` is removed. The Swagger UI pages under `/api/docs` get a relaxed script policy (inline scripts) because the UI needs it; the API itself does not.
